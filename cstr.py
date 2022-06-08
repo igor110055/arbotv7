@@ -123,13 +123,13 @@ class Krak_man():
                         df = self.trade_hist[pair]
                     except KeyError:
                         # print('no hist yet')
-                        self.trade_hist[pair] = pd.DataFrame({'price':float(item[0]) , 'qtt':float(item[1]), 'unix':float(item[2]), 'side':item[3]}, index = [0])
+                        self.trade_hist[pair] = pd.DataFrame(columns=['price', 'qtt', 'unix','side'])
                         df = self.trade_hist[pair]
                         # print(df)
-                        return
+                        
 
                     df.loc[len(df)] = ls
-                    # self.trade_hist[pair] = df 
+                    self.trade_hist[pair] = df 
                     # print(self.trade_hist)
         def get_book(ticker):
             api_symbol = ticker
