@@ -48,27 +48,6 @@ class Bot():
         sell_delta = round(first_sell-hfirst_buy,6)
         buy_spread = round(buy_delta/first_sell*100, 3)
         sell_spread = round(sell_delta/first_buy*100, 3)
-        # print(f'buy spread : {buy_spread}')
-        # print(f'sell spread : {sell_spread}')
-        # print(f'First sell on kraken is {first_sell}')
-        # print(f'First buy on binance is {hfirst_buy}')
-        # print(f'sell delta is {sell_delta}')
-        # print(f'sell spread is {sell_spread}%')
-        # print('\n')
-        # print(f'First buy on kraken is {first_buy}')
-        # print(f'First sell on binance is {hfirst_sell}')
-        # print(f'buy delta is {sell_delta}')
-        # print(f'buy spread is {sell_spread}%')
-
-        # print(f'buy delta is {buy_delta}')
-        # print(f'buy spread is {buy_spread}')
-
-        # print(f'Last price on {self.hedge_manager.name} is {last_price}')
-        # print(f'First buy is {first_buy}')
-        # print(f'Buy delta is {buy_delta}$ or {buy_spread}%')
-        # print(f'First sell is {first_sell}')        
-        # print(f'Sell delta is {sell_delta}$ or {sell_spread}%')
-        # print('\n')
         if buy_spread < self.threshold:
             buy_spread = False
         if sell_spread < self.threshold:

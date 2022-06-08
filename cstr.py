@@ -203,6 +203,8 @@ class Krak_man():
                             print(f'problem :{e}')
                         bidsdf = pd.DataFrame({'price':lsbp, 'qtt':lsbq})
                         asksdf = pd.DataFrame({'price':lsap, 'qtt':lsaq})
+                        bidsdf = bidsdf.astype(float)
+                        asksdf = asksdf.astype(float)
                         self.books[ticker] = {'buy':bidsdf, 'sell':asksdf}
                         # print(self.books)
                         time.sleep(0.1)
