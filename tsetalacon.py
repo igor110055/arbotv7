@@ -1,4 +1,4 @@
-# import pandas as pd
+import pandas as pd
 
 import time
 # class Bao():
@@ -39,14 +39,20 @@ import time
 # if bao:
 #     print('bao')
 
-d={'a':'b'}
-if bool(d):
-    print('yes')
-n = 1
-while n <= 1000:
-    print(n)
-    time.sleep(1)
-    if n%5 == 0:
-        break
-    n+=1
-    print('its ion the loop')
+# d={'a':'b'}
+# if bool(d):
+#     print('yes')
+# n = 1
+# while n <= 1000:
+#     print(n)
+#     time.sleep(1)
+#     if n%5 == 0:
+#         break
+#     n+=1
+
+
+df = pd.DataFrame({'cola':['a', 'c'], 'colb':['b', 'd']})
+print(df)
+print(len(df))
+df.loc[len(df)] = ['bao']
+print(df)
