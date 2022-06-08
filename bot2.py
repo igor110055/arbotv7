@@ -59,15 +59,15 @@ class Bot():
     def get_delta (self):
         """Returns a dict {buy, sell}
         if spread is < threshold, returns False"""
-        hfirst_sell =float(hedge_ob['sell'].iloc[0]['price'])
-        hfirst_buy = float(hedge_ob['buy'].iloc[0]['price'])
+        hfirst_sell = self.hedge_manager.books[self.ticker]['sell'].iloc(0)['price']
+        hfirst_buy = self.hedge_manager.books[self.ticker]['buy'].iloc(0)['price']
         # last_price = float(self.hedge_manager.get_trades()['price'].iloc[-1])
-        first_sell = float(trade_ob['sell'].iloc[0]['price'])
-        first_buy = float(trade_ob['buy'].iloc[0]['price'])
-        buy_delta = round(hfirst_sell-first_buy,6)
-        sell_delta = round(first_sell-hfirst_buy,6)
-        buy_spread = round(buy_delta/first_sell*100, 3)
-        sell_spread = round(sell_delta/first_buy*100, 3)
+        first_sell = self.trade_manager.books[self.ticker]['sell'].iloc(0)['price']
+        first_buy = self.trade_manager.books[self.ticker]['buy'].iloc(0)['price']
+        buy_delta = hfirst_sell-first_buy
+        sell_delta = first_sell-hfirst_buy
+        buy_spread = buy_delta/first_sell*100
+        sell_spread = sell_delta/first_buy*100
         if buy_spread < self.threshold:
             buy_spread = False
         if sell_spread < self.threshold:
@@ -93,6 +93,7 @@ class Bot():
             self.wallet = df
 
     def get_decimals(self, num):
+        '''to see how many decimals to adjust the trade amount for being first'''
         string = str(num)
         dec = len(string.split(".")[1])
         print(dec)
@@ -106,17 +107,84 @@ class Bot():
         self.decimals = float(diff)
     
     def init_transac_hist(self):
-            if path.exists('csv/trade_hist_{}.csv'.format(self.name)):
-                print(f'{self.name}trade_hist found')
-                t_hist = pd.read_csv('csv/trade_hist_{}.csv'.format(self.name), index_col=False)
-            else :
-                print(f'{self.name}creating trade hist')
-                t_hist = pd.DataFrame(columns=['date', 'exchange', 'side', 'price','qtt', 'value', 'fee'])
-                t_hist.to_csv('csv/trade_hist_{}.csv'.format(self.name), index=False)
-            self.transac_hist = t_hist
-            return t_hist
+        '''creates or loads the DF'''
+        if path.exists('csv/trade_hist_{}.csv'.format(self.name)):
+            print(f'{self.name}trade_hist found')
+            t_hist = pd.read_csv('csv/trade_hist_{}.csv'.format(self.name), index_col=False)
+        else :
+            print(f'{self.name}creating trade hist')
+            t_hist = pd.DataFrame(columns=['date', 'exchange', 'side', 'price','qtt', 'value', 'fee'])
+            t_hist.to_csv('csv/trade_hist_{}.csv'.format(self.name), index=False)
+        self.transac_hist = t_hist
+        return t_hist
+
+    def set_order(self, side, target='fiat', multiplicator=0.2):
+        ''''Sets the order according to the config of the bot, returns a dict {price, qtt, value}
+        target valid params are 'crypto' or 'fiat', how the profit is made'''
+
+        if side == 'buy':
+            price = self.trade_manager.books[self.ticker][side] + self.decimals
+        elif side == 'sell':
+            price = self.trade_manager.books[self.ticker][side] - self.decimals
+        if target =='fiat':
+            value = self.wallet[f'{self.trade_manager.name}_fiat'].iloc[-1]*multiplicator
+            qtt = value/price
+        elif target =='crypto':
+            qtt = self.wallet[f'{self.trade_manager.name}_crypto'].iloc[-1]*multiplicator
+            value = qtt*price
+        order = {'price':price, 'qtt':qtt, 'value':value}
+        return order
+
+    def check_if_order_is_first(self, order):
+        '''returns bool if order is or not longer at the top'''
+        first = self.trade_manager.books[self.ticker][order['side'].iloc[0]['price']]
+        if order['side'] == 'buy':
+            price = first+self.decimals
+        elif order['side'] == 'sell':
+            price = first-self.decimals
+        if price == order['price']:
+            return True
+        else:
+            print('Not first')
+            return False
+
+    def execute_order(self, order):
+        '''checks if the order got filled
+        returns a dict with the amount liquidated or False, updates order'''
+        #check if filled
+        last_trades = self.get_last_trades()
+        if isinstance(last_trades, pd.DataFrame):
+            df = last_trades
+            if order['side']=='buy':
+                df = df[df['price']<=order['price']]
+                print('some got filled')
+            elif order['side']=='sell':
+                df = df[df['price']>=order['price']]
+                print('some got filled')
+            ########WE HARE
+            
 
 
+        else :
+            return False
+            
+
+
+
+    def hedge_market(self, order_exec):
+        pass
+
+    def get_last_trades(self):
+        if not self.last_trade:
+            last_trades= self.trade_manager.trade_hist[self.ticker]
+            self.last_trade = self.trade_manager.trade_hist[self.ticker].iloc[-1]
+            return last_trades
+        if self.last_trade.equals(self.trade_manager.trade_hist[self.ticker].iloc[-1]):
+            return False
+        else:
+            last_trades = self.trade_manager[self.trade_manager.trade_hist[self.ticker]['unix']>self.last_trade['unix']]
+            self.last_trade = self.trade_manager.trade_hist[self.ticker].iloc[-1]
+            return last_trades
 
 ticker_list = ['XBT/USDT', 'ETH/USDT', 'DOT/USDT', 'LTC/USDT', 'BCH/USDT', 'ADA/USDT', 'EOS/USDT', 'LINK/USDT']
 bm = Botmaker(ticker_list, 0.1, 20000)
@@ -202,7 +270,11 @@ class Main_prog():
             df.to_csv('csv/bots.csv', index=False)
                 # print(df)
 
-        
+
+
+
+
+#TEST RUNS UNCOMMENT FOR TEST
 
 # ticker_list = ['XBT/USDT', 'ETH/USDT', 'DOT/USDT', 'LTC/USDT', 'BCH/USDT', 'ADA/USDT', 'EOS/USDT', 'LINK/USDT']
 # bm1 = Botmaker(ticker_list, 0.1, 20000)
@@ -210,9 +282,10 @@ class Main_prog():
 # bm2 = Botmaker(ticker_list, 0.5, 10000)
 # bl2 = bm2.generate_bot_list()
 
-
 m = Main_prog(None, load_from_file='csv/bots.csv')
 m.run()
+while True:
+    print(m.managers['trade'].trade_hist)
 print(m.botlist)
 for bot in m.botlist:
     print(bot.name)
