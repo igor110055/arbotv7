@@ -80,7 +80,7 @@ class Bot():
         self.last_trade = False
         self.decimals = False
         self.orders = {'buy':False, 'sell':False}
-        self.restrict = {'buy':False, 'sell':False}
+        self.restriction = {'buy':False, 'sell':False}
 
     def get_delta (self):
         """Returns a dict {buy, sell}
@@ -150,12 +150,12 @@ class Bot():
         fake to get the price to restrict'''
 
         if side == 'buy':
-            if not self.restrict['buy']:
+            if not self.restriction['buy']:
                 price = self.trade_manager.books[self.ticker][side] + self.decimals
             else:
                 return False
         elif side == 'sell':
-            if not self.restrict['sell']:
+            if not self.restriction['sell']:
                 price = self.trade_manager.books[self.ticker][side] - self.decimals
             else : 
                 return False
@@ -252,29 +252,37 @@ class Bot():
             return last_trades
 
     def restrict(self, margin=1.1):
-        if bool(self.orders):
-            available_amounts = {
+
+        available_amounts = {
                 'fiat':self.wallet[f'{self.hedge_manager.name}_fiat'].iloc[-1],
                 'crypto':self.wallet[f'{self.hedge_manager.name}_crypto'].iloc[-1]
             }
-            for side, order in self.orders.items():
-                if side == 'buy':
-                    qtt = order['qtt']
-                    if available_amounts['crypto'] < qtt*margin:
-                        print('NOT ENOUGH TO HEDGE')
-                        self.restrict={'buy':True}
-                    else : 
-                        self.restrict={'buy':False}
-                elif side == 'sell':
-                    value = order['value']
-                    if available_amounts['fiat'] < value*margin:
-                        print('NOT ENOUGH TO HEDGE')
-                        self.restrict={'sell':True}
-                    else : 
-                        self.restrict={'sell':False}
+        print(available_amounts)
+        ls = ['buy', 'sell']
+        for side in ls:
+            if side == 'buy':
+                order = self.set_order(side, fake=True)
+                print(order)
+                qtt = order['qtt']
+                if available_amounts['crypto'] < qtt*margin:
+                    print('NOT ENOUGH TO HEDGE')
+                    self.restriction={'buy':True}
+                else : 
+                    self.restriction={'buy':False}
+            
+            elif side == 'sell':
+                order = self.set_order(side, fake=True)
+                print(order)
+                value = order['value']
+                if available_amounts['fiat'] < value*margin:
+                    print('NOT ENOUGH TO HEDGE')
+                    self.restriction={'sell':True}
+                else : 
+                    self.restriction={'sell':False}
 
     def run(self):
-        
+
+
         def loop(side):
             #see and execute if rders filled
             if isinstance(self.orders[side], dict):
@@ -294,6 +302,14 @@ class Bot():
                 elif not value:
                     print('canceling orders, delta gone')
 
+        lsside = ['buy', 'sell']
+        lst = []
+        for side in lsside:
+            t = threading.Thread(target=loop, args = [side])
+            t.start()
+            lst.append(t)
+        for th in lst:
+            th.join()
 
     def store_trades(self, exec, hedge):
         df = self.transac_hist
@@ -398,7 +414,7 @@ class Main_prog():
             res = [item for sublist in self.raw_botlist for item in sublist]
             return res
         else:
-            return self.botlist
+            return self.raw_botlist
 
     def run(self):
 
@@ -439,8 +455,15 @@ class Main_prog():
             df.to_csv('csv/bots.csv', index=False)
         
         while True:
+            ls = []
+            # print('running loop')
             for bot in self.botlist:
-                bot.run()
+                # print(bot.name)
+                t = threading.Thread(target=bot.run)
+                t.start()
+            for thread in ls:
+                thread.join()
+
 
 
 
@@ -454,7 +477,10 @@ class Main_prog():
 # bl = bm.generate_bot_list()
 # bm2 = Botmaker(ticker_list, 0.5, 10000)
 # bl2 = bm2.generate_bot_list()
+tick = ['XBT/USDT', 'ETH/USDT']
 c = constructor()
+b = Botmaker(tick, 0.01, 10000)
+bl = b.generate_bot_list()
 m = Main_prog(None, load_from_file='csv/bots.csv')
 m.run()
 # while True:
