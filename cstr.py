@@ -58,8 +58,8 @@ class Bin_man():
                 for item in res["asks"]:
                     lsap.append(item[0])
                     lsaq.append(item[1])
-                bidsdf = pd.DataFrame({"price": lsbp, "qtt": lsbq})
-                asksdf = pd.DataFrame({"price": lsap, "qtt": lsaq})
+                bidsdf = pd.DataFrame({"price": lsbp, "qtt": lsbq}).astype(float)
+                asksdf = pd.DataFrame({"price": lsap, "qtt": lsaq}).astype(float)
                 # print(bidsdf)
                 # print(asksdf)
                 self.books[ticker] = {"buy": bidsdf, "sell": asksdf}

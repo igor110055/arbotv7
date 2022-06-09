@@ -1,5 +1,5 @@
 from datetime import datetime
-from numpy import linspace
+from numpy import blackman, linspace
 import pandas as pd
 import names as nm
 from wonderwords import RandomWord
@@ -7,7 +7,7 @@ from cstr import Bin_man, Krak_man
 import threading
 from os import path
 import os
-
+import time
 
 
 r = RandomWord()
@@ -34,7 +34,7 @@ class constructor():
         am = value * rate
         rest = value - am
         return {"rest": rest, "fees": am}
-
+c=constructor()
 class Botmaker():
     
     '''creates bots with specified params
@@ -85,18 +85,21 @@ class Bot():
     def get_delta (self):
         """Returns a dict {buy, sell}
         if spread is < threshold, returns False"""
-        hfirst_sell = self.hedge_manager.books[self.ticker]['sell'].iloc(0)['price']
-        hfirst_buy = self.hedge_manager.books[self.ticker]['buy'].iloc(0)['price']
+        hfirst_sell = self.hedge_manager.books[c.transpose_ticker(self.ticker)]['sell'].iloc[0]['price']
+        hfirst_buy = self.hedge_manager.books[c.transpose_ticker(self.ticker)]['buy'].iloc[0]['price']
         # last_price = float(self.hedge_manager.get_trades()['price'].iloc[-1])
-        first_sell = self.trade_manager.books[self.ticker]['sell'].iloc(0)['price']
-        first_buy = self.trade_manager.books[self.ticker]['buy'].iloc(0)['price']
+        first_sell = self.trade_manager.books[self.ticker]['sell'].iloc[0]['price']
+        first_buy = self.trade_manager.books[self.ticker]['buy'].iloc[0]['price']
+        # print(hfirst_sell)
+        # print(type(hfirst_sell))
+        # print(type(first_buy))
         buy_delta = hfirst_sell-first_buy
         sell_delta = first_sell-hfirst_buy
         buy_spread = buy_delta/first_sell*100
         sell_spread = sell_delta/first_buy*100
-        if buy_spread < self.threshold:
+        if buy_spread < self.crit_spread:
             buy_spread = False
-        if sell_spread < self.threshold:
+        if sell_spread < self.crit_spread:
             sell_spread = False
         return {'buy':buy_spread, 'sell':sell_spread}
 
@@ -150,22 +153,29 @@ class Bot():
         fake to get the price to restrict'''
 
         if side == 'buy':
-            if not self.restriction['buy']:
-                price = self.trade_manager.books[self.ticker][side] + self.decimals
-            else:
-                return False
-        elif side == 'sell':
-            if not self.restriction['sell']:
-                price = self.trade_manager.books[self.ticker][side] - self.decimals
+            if not fake:
+                if not self.restriction['buy']:
+                    price = self.trade_manager.books[self.ticker][side].iloc[0]['price'] + self.decimals
+                else:
+                    return False
             else : 
-                return False
+                price = self.trade_manager.books[self.ticker][side].iloc[0]['price'] + self.decimals
+        elif side == 'sell':
+            if not fake:
+                if not self.restriction['sell']:
+                    price = self.trade_manager.books[self.ticker][side].iloc[0]['price'] - self.decimals
+                else : 
+                    return False
+            else:
+                price = self.trade_manager.books[self.ticker][side].iloc[0]['price'] - self.decimals 
+
         if target =='fiat':
             value = self.wallet[f'{self.trade_manager.name}_fiat'].iloc[-1]*multiplicator
-            qtt = value/price
+            qtt = float(value/price)
         elif target =='crypto':
             qtt = self.wallet[f'{self.trade_manager.name}_crypto'].iloc[-1]*multiplicator
-            value = qtt*price
-        order = {'price':price, 'qtt':qtt, 'value':value}
+            value = float(qtt*price)
+        order = {'side' : side, 'price':price, 'qtt':qtt, 'value':value}
         if not fake:
             self.orders[side] = order
         return order
@@ -173,7 +183,7 @@ class Bot():
     def check_if_order_is_first(self, order):
         '''returns bool if order is or not longer at the top'''
         dct = {}
-        first = self.trade_manager.books[self.ticker][order['side'].iloc[0]['price']]
+        first = self.trade_manager.books[self.ticker][order['side']].iloc[0]['price']
         if order['side'] == 'buy':
             price = first+self.decimals
             
@@ -201,18 +211,25 @@ class Bot():
             if df['qtt'].sum()>=order['qtt']:
                 print('ORDER FULLY FILLED')
                 self.orders[order['side']] = False
+                print(order)
                 return order
             else :
                 order['qtt'] = df['qtt'].sum()
-                order['value'] == df['qtt'].sum()*order['price']
-                self.orders[order['side']]['qtt'] -= df['qtt'].sum()
-                self.orders[order['side']]['value'] == self.orders['side']['qtt']*self.orders[order['side']['price']]
+                order['value'] = df['qtt'].sum()*order['price']
+                #update the active order, for now cancel it
+                self.orders[order['side']] = False
+                # print(self.orders)
+                # self.orders[order['side']]['qtt'] -= df['qtt'].sum()
+                # self.orders[order['side']]['value'] = self.orders[order['side']]['qtt']*self.orders[order['side']['price']]
+                print(order)
                 return order
         else :
             return False
-            
+
     def hedge_market(self, exec_order):
+        print('hedging')
         qtt = exec_order['qtt']
+        # print(self.hedge_manager.books[c.transpose_ticker(self.ticker)]['sell'])
         if exec_order['side'] == 'buy':
             side = 'sell'
         elif exec_order['side'] == 'sell':
@@ -235,81 +252,125 @@ class Bot():
 
         df = pd.DataFrame({'price':lsprice, 'qtt':lsqtt})
         df['value'] = df['price']*df['qtt']
+        # print('HEDGE DF')
+        # print(df)
         avg = df['value'].sum()/df['qtt'].sum()
         exec = {'side':side, 'price':avg, 'qtt':df['qtt'].sum(), 'value':df['value'].sum()}
+        print(f'hedge is : {exec}')
+        print(exec)
         return exec
 
     def get_last_trades(self):
-        if not self.last_trade:
-            last_trades= self.trade_manager.trade_hist[self.ticker]
-            self.last_trade = self.trade_manager.trade_hist[self.ticker].iloc[-1]
-            return last_trades
-        if self.last_trade.equals(self.trade_manager.trade_hist[self.ticker].iloc[-1]):
+        print('last trade is :')
+        print(self.last_trade)
+        try:
+            df = self.trade_manager.trade_hist[self.ticker]
+            last_trades = df
+        except KeyError:
+            print('no trades yet')
             return False
+
+        if isinstance(self.last_trade, pd.Series):
+            if self.last_trade.equals(df.iloc[-1]):
+                print('no new trade :')
+                print(self.last_trade)
+                print(df.iloc[-1])
+                return False
+            else:
+                last_trades = df[df['unix']>self.last_trade['unix']]
+                self.last_trade = df.iloc[-1]
+                return last_trades
         else:
-            last_trades = self.trade_manager[self.trade_manager.trade_hist[self.ticker]['unix']>self.last_trade['unix']]
-            self.last_trade = self.trade_manager.trade_hist[self.ticker].iloc[-1]
+            
+            self.last_trade = df.iloc[-1]
+            
             return last_trades
 
-    def restrict(self, margin=1.1):
+    def restrict(self, margin=1):
 
         available_amounts = {
                 'fiat':self.wallet[f'{self.hedge_manager.name}_fiat'].iloc[-1],
                 'crypto':self.wallet[f'{self.hedge_manager.name}_crypto'].iloc[-1]
             }
-        print(available_amounts)
+        #print(available_amounts)
         ls = ['buy', 'sell']
         for side in ls:
             if side == 'buy':
                 order = self.set_order(side, fake=True)
-                print(order)
+                # print(order)
                 qtt = order['qtt']
+                # print(order['qtt'])
+                # print(available_amounts['crypto'])
+                print(f'min qtt to hedge : {qtt}')
                 if available_amounts['crypto'] < qtt*margin:
                     print('NOT ENOUGH TO HEDGE')
-                    self.restriction={'buy':True}
+                    self.restriction['buy']=True
                 else : 
-                    self.restriction={'buy':False}
+                    self.restriction['buy']=False
             
             elif side == 'sell':
                 order = self.set_order(side, fake=True)
-                print(order)
+                # print(order)
                 value = order['value']
+                print(f'min value to hedge : {value}')
                 if available_amounts['fiat'] < value*margin:
                     print('NOT ENOUGH TO HEDGE')
-                    self.restriction={'sell':True}
+                    self.restriction['sell']=True
                 else : 
-                    self.restriction={'sell':False}
+                    self.restriction['sell']=False
 
     def run(self):
 
 
         def loop(side):
+            print(f'START LOOP {self.ticker}')
             #see and execute if rders filled
+            print('checking for orders')
             if isinstance(self.orders[side], dict):
+                print(f'orders are {self.orders}')
                 exec = self.execute_order(self.orders[side])
                 if isinstance(exec, dict):
                     hedge = self.hedge_market(exec)
                     self.store_trades(exec, hedge)
+            else:
+                print('no orders')
             #make permissions
             self.restrict()
+            print('restrictions are :')
+            print(self.restriction)
             #set orders
-            self.check_if_order_is_first()
+            print(f'CHECKING {side} DELTA')
             delta = self.get_delta()
+            print(delta)
             for side, value in delta.items():
-                if isinstance(value, dict):
+                print(side, value)
+                if isinstance(value, float):
+                    print(f'{side} DELTA IS VALID')
+                    if isinstance(self.orders[side], dict):
+                        first = self.check_if_order_is_first(self.orders[side])
+                        if first:
+                            print('order is first')
+                            return
+                        else :
+                            print('order is not first, cancelling')
+                            self.orders[side]=False
                     self.set_order(side)
                     print(self.orders)
                 elif not value:
-                    print('canceling orders, delta gone')
+                    print('NO GOOD DELTA')
+                    if isinstance(self.orders[side], dict):
+                        print(f'Cancelling order {self.orders[side]}')
+                        self.orders[side] = False
 
         lsside = ['buy', 'sell']
         lst = []
         for side in lsside:
-            t = threading.Thread(target=loop, args = [side])
-            t.start()
-            lst.append(t)
-        for th in lst:
-            th.join()
+            loop(side)
+            #t = threading.Thread(target=loop, args = [side])
+            #t.start()
+            #lst.append(t)
+        #for th in lst:
+            #th.join()
 
     def store_trades(self, exec, hedge):
         df = self.transac_hist
@@ -322,7 +383,8 @@ class Bot():
         df.loc[len(df)] = [
             datetime.now(), 
             self.trade_manager.name, 
-            exec['side'], 
+            exec['side'],
+            exec['price'], 
             exec['qtt'], 
             exec['value'],
             fee
@@ -336,13 +398,14 @@ class Bot():
             tcrypto_balance = trade_balance_crypto - exec['qtt']
         
         #for hedge
-        fee = c.get_fees(hedge['value'], 'market')
+        fee = c.get_fees(hedge['value'], 'market')['fees']
         hedge_balance_fiat = wallet[f'{self.hedge_manager.name}_fiat'].iloc[-1]
         hedge_balance_crypto = wallet[f'{self.hedge_manager.name}_crypto'].iloc[-1]
         df.loc[len(df)] = [
             datetime.now(), 
             self.hedge_manager.name, 
-            hedge['side'], 
+            hedge['side'],
+            hedge['price'], 
             hedge['qtt'], 
             hedge['value'],
             fee
@@ -362,7 +425,7 @@ class Bot():
         #add row and save wallet
         wallet.loc[len(wallet)] = [datetime.now(), tcrypto_balance, tfiat_balance, hcrypto_balance, hfiat_balance]
         self.wallet = wallet
-        wallet.to_csv(f'csv/wallet{self.name}.csv', index=False)
+        wallet.to_csv(f'csv/wallet_{self.name}.csv', index=False)
 
         #print the trade
         df = df.iloc[-2:]
@@ -453,16 +516,20 @@ class Main_prog():
                 df.loc[n] = [bot.name, bot.ticker, bot.crit_spread, bot.decimals]
                 n+=1
             df.to_csv('csv/bots.csv', index=False)
-        
-        while True:
-            ls = []
-            # print('running loop')
-            for bot in self.botlist:
-                # print(bot.name)
-                t = threading.Thread(target=bot.run)
-                t.start()
-            for thread in ls:
-                thread.join()
+        # n=0
+        # while True:
+        #     ls = []
+        #     print('running loop')
+        #     # for bot in self.botlist:
+        #         # bot.run()
+        #         #t = threading.Thread(target=bot.run)
+        #         #t.start()
+        #     #for thread in ls:
+        #         #thread.join()
+        #     time.sleep(0.1)
+        #     print(f'end loop {n}')
+        #     print('\n')
+        #     n+=1
 
 
 
@@ -477,11 +544,16 @@ class Main_prog():
 # bl = bm.generate_bot_list()
 # bm2 = Botmaker(ticker_list, 0.5, 10000)
 # bl2 = bm2.generate_bot_list()
-tick = ['XBT/USDT', 'ETH/USDT']
-c = constructor()
-b = Botmaker(tick, 0.01, 10000)
-bl = b.generate_bot_list()
-m = Main_prog(None, load_from_file='csv/bots.csv')
-m.run()
-# while True:
-    # print(m.managers['trade'].trade_hist)
+# tick = ['XBT/USDT']
+# c = constructor()
+# b = Botmaker(tick, 0.01, 10000)
+# bl = b.generate_bot_list()
+# m = Main_prog(bl)
+# m.run()
+# # m = Main_prog(None, 'csv/bots.csv')
+# m.botlist[0].restrict()
+# print(m.botlist[0].orders)
+# # hedge = m.botlist[0].hedge_market(exec)
+# # print(hedge)
+# # while True:
+#     # print(m.managers['trade'].trade_hist)

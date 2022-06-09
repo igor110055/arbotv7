@@ -51,8 +51,17 @@ import time
 #     n+=1
 
 
-df = pd.DataFrame({'cola':['a', 'c'], 'colb':['b', 'd']})
-print(df)
-print(len(df))
-df.loc[len(df)] = ['bao']
-print(df)
+# df = pd.DataFrame({'cola':['a', 'c'], 'colb':['b', 'd']})
+# print(df)
+# print(len(df))
+# df.loc[len(df)] = ['bao', 'kk']
+# print(df)
+# print(type(df.iloc[-1]))
+# if isinstance(df.iloc[-1], pd.Series):
+#     print('its a serie')
+
+s = pd.Series({'s':3})
+print(s)
+df = pd.DataFrame({'a': [1,3], 'b':[2,4]})
+df2 = df[df['b']>s['s']]
+print(df2)
